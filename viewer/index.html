@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline Multi-Map Viewer</title>
+  <link rel="stylesheet" href="/assets/viewer.css">
+</head>
+<body>
+  <main id="app">
+    <section id="viewport" aria-label="3D map scene"></section>
+    <aside id="panel">
+      <header>
+        <p class="eyebrow">OFFLINE MAP PROJECT</p>
+        <h1>三维多地图查看器</h1>
+        <p id="project-path" class="muted">正在加载地图项目...</p>
+      </header>
+      <section class="stats" aria-label="project summary">
+        <div><strong id="map-count">-</strong><span>地图</span></div>
+        <div><strong id="transition-count">-</strong><span>传送点</span></div>
+        <div><strong id="point-count">-</strong><span>点云点</span></div>
+      </section>
+      <section class="controls">
+        <label><input id="toggle-maps" type="checkbox" checked> 地图平面</label>
+        <label><input id="toggle-cloud" type="checkbox" checked> PGO 点云</label>
+        <label><input id="toggle-relations" type="checkbox" checked> 地图关系</label>
+        <label><input id="toggle-transitions" type="checkbox" checked> 传送点</label>
+        <button id="reset-camera" type="button">重置视角</button>
+      </section>
+      <section>
+        <h2>图例</h2>
+        <div class="legend"><span class="swatch map-swatch"></span>地图平面</div>
+        <div class="legend"><span class="swatch cloud-swatch"></span>PGO 点云</div>
+        <div class="legend"><span class="swatch relation-swatch"></span>关系边</div>
+        <div class="legend"><span class="swatch transition-swatch"></span>传送点</div>
+        <p class="muted">地图高度来自上下文或传送点估计时，会在详情中标注。</p>
+      </section>
+      <section id="details" class="details">
+        <h2>选择对象</h2>
+        <p class="muted">点击地图或传送点查看坐标和属性。</p>
+      </section>
+      <section id="warnings" class="warnings" hidden>
+        <h2>数据提示</h2>
+        <ul id="warning-list"></ul>
+      </section>
+      <footer>Three.js 0.179.1 · 只读离线查看</footer>
+    </aside>
+    <div id="loading">加载三维场景...</div>
+  </main>
+  <script type="module" src="/assets/viewer.js"></script>
+</body>
+</html>

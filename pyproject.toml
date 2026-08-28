@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "offline-map-viewer"
+version = "0.1.0"
+description = "Offline 3D viewer for GridMapper multi-map projects"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "Pillow>=10.0"]
+
+[project.scripts]
+map-viewer = "map_viewer.map_viewer:main"
+
+[tool.setuptools]
+packages = ["map_viewer"]
+
+[tool.setuptools.package-data]
+map_viewer = ["viewer/**"]

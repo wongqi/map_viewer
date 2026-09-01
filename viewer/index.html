@@ -11,7 +11,6 @@
     <section id="viewport" aria-label="3D map scene"></section>
     <aside id="panel">
       <header>
-        <p class="eyebrow">OFFLINE MAP PROJECT</p>
         <h1>三维多地图查看器</h1>
         <p id="project-path" class="muted">正在加载地图项目...</p>
       </header>
@@ -21,20 +20,14 @@
         <div><strong id="point-count">-</strong><span>点云点</span></div>
       </section>
       <section class="controls">
-        <label><input id="toggle-maps" type="checkbox" checked> 地图平面</label>
-        <label><input id="toggle-cloud" type="checkbox" checked> PGO 点云</label>
-        <label><input id="toggle-relations" type="checkbox" checked> 地图关系</label>
-        <label><input id="toggle-transitions" type="checkbox" checked> 传送点</label>
+        <h2>显示内容</h2>
+        <label><input id="toggle-maps" type="checkbox" checked><span class="swatch map-swatch"></span>地图平面</label>
+        <label><input id="toggle-cloud" type="checkbox" checked><span class="swatch cloud-swatch"></span>PGO 点云</label>
+        <label><input id="toggle-relations" type="checkbox" checked><span class="swatch relation-swatch"></span>地图关系</label>
+        <label><input id="toggle-transitions" type="checkbox" checked><span class="swatch transition-swatch"></span>传送点</label>
         <button id="reset-camera" type="button">重置视角</button>
       </section>
-      <section>
-        <h2>图例</h2>
-        <div class="legend"><span class="swatch map-swatch"></span>地图平面</div>
-        <div class="legend"><span class="swatch cloud-swatch"></span>PGO 点云</div>
-        <div class="legend"><span class="swatch relation-swatch"></span>关系边</div>
-        <div class="legend"><span class="swatch transition-swatch"></span>传送点</div>
-        <p class="muted">地图高度来自上下文或传送点估计时，会在详情中标注。</p>
-      </section>
+      <p class="muted height-note">地图高度来自上下文或传送点估计时，会在详情中标注。</p>
       <section id="details" class="details">
         <h2>选择对象</h2>
         <p class="muted">点击地图或传送点查看坐标和属性。</p>
@@ -43,7 +36,28 @@
         <h2>数据提示</h2>
         <ul id="warning-list"></ul>
       </section>
-      <footer>Three.js 0.179.1 · 只读离线查看</footer>
+      <section class="editor">
+        <h2>传送点编辑</h2>
+        <label><input id="edit-mode" type="checkbox"> 启用编辑模式</label>
+        <div id="editor-body" class="editor-body" hidden>
+          <p id="edit-help" class="muted">启用后点击地图可新增传送点，点击已有点可编辑。</p>
+          <div class="edit-actions edit-tools"><button id="new-edit" type="button">新建</button><button id="move-edit" type="button">移动</button><button id="delete-edit" type="button" class="danger">删除</button></div>
+          <div class="edit-grid">
+            <label>ID<input id="edit-id" type="text" placeholder="tp_new"></label>
+            <label>类型<select id="edit-type"><option>stairs</option><option>door</option><option>elevator</option><option>corridor</option><option selected>manual</option></select></label>
+            <label>起点地图<select id="edit-from"></select></label>
+            <label>终点地图<select id="edit-to"></select></label>
+            <label>X<input id="edit-x" type="number" step="0.001"></label>
+            <label>Y<input id="edit-y" type="number" step="0.001"></label>
+            <label>Z<input id="edit-z" type="number" step="0.001"></label>
+            <label>Yaw<input id="edit-yaw" type="number" step="0.001"></label>
+          </div>
+          <label><input id="edit-bidirectional" type="checkbox" checked> 双向</label>
+          <div class="edit-actions edit-submit"><button id="apply-edit" type="button">应用修改</button><button id="save-edit" type="button">保存到 CSV</button></div>
+          <p id="edit-status" class="muted"></p>
+        </div>
+      </section>
+      <footer>Three.js 0.179.1</footer>
     </aside>
     <div id="loading">加载三维场景...</div>
   </main>

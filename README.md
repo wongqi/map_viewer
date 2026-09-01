@@ -24,3 +24,14 @@ python3 -m pip install numpy Pillow
 ```
 
 `context/inspection_context.yaml` 存在时可选安装 `PyYAML` 读取精确的 `z_p50`；没有该文件时，地图高度会从传送点高度估计，并在页面中标注来源。
+
+## 编辑传送点
+
+页面勾选“启用编辑模式”后：
+
+- 点击已有传送点，可修改 ID、起止地图、世界坐标、yaw、类型和是否双向；
+- 点击“在地图上新建传送点”后再点击地图平面，可用鼠标位置填写新点坐标；
+- “应用修改”只更新当前浏览器中的场景；
+- “保存到 CSV”才会写入 `transition_points.csv`。
+
+写入前会校验 ID 唯一性、地图存在性、数值坐标和起止地图。保存时先生成 `transition_points.csv.bak`，再通过临时文件原子替换原 CSV。地图 PNG/YAML、`map_relations.csv` 和 PCD 不会被编辑功能修改。

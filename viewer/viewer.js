@@ -34,6 +34,11 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const objects = [];
 let initialCamera = null;
+let sceneData = null;
+let transitionRecords = [];
+let selectedTransitionId = null;
+let waitingForMapClick = false;
+let waitingForMoveClick = false;
 
 function formatNumber(value, digits = 3) {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : String(value);
@@ -93,6 +98,75 @@ function addTransitions(transitions) {
     if (transition.bidirectional) transitionGroup.add(new THREE.ArrowHelper(direction.clone().negate(), position, 1.45, color, .55, .35));
   }
 }
+function mapOptions() {
+  return sceneData.maps.map(record => `<option value="${record.map_id}">${record.map_id}</option>`).join("");
+}
+function updateMapSelects() {
+  document.getElementById("edit-from").innerHTML = mapOptions();
+  document.getElementById("edit-to").innerHTML = mapOptions();
+}
+function fillEditor(record) {
+  selectedTransitionId = record?.transition_id || null;
+  document.getElementById("edit-id").value = record?.transition_id || "";
+  document.getElementById("edit-type").value = record?.type || "manual";
+  document.getElementById("edit-from").value = record?.from_map || sceneData.maps[0]?.map_id || "";
+  document.getElementById("edit-to").value = record?.to_map || sceneData.maps[1]?.map_id || sceneData.maps[0]?.map_id || "";
+  document.getElementById("edit-x").value = record ? record.world_x : "";
+  document.getElementById("edit-y").value = record ? record.world_y : "";
+  document.getElementById("edit-z").value = record ? record.world_z : "";
+  document.getElementById("edit-yaw").value = record ? record.world_yaw_rad : "0";
+  document.getElementById("edit-bidirectional").checked = record ? record.bidirectional : true;
+  document.getElementById("edit-status").textContent = record ? `已选中 ${record.transition_id}` : "已准备新传送点";
+}
+function setNavigationLocked(locked) {
+  if (controls) controls.enabled = !locked;
+}
+function setEditorEnabled(enabled) {
+  const checkbox = document.getElementById("edit-mode");
+  checkbox.checked = enabled;
+  document.getElementById("editor-body").hidden = !enabled;
+  if (!enabled) {
+    waitingForMapClick = false;
+    waitingForMoveClick = false;
+    setNavigationLocked(false);
+  }
+}
+function editorValue() {
+  const number = id => Number(document.getElementById(id).value);
+  return { transition_id: document.getElementById("edit-id").value.trim(), from_map: document.getElementById("edit-from").value, to_map: document.getElementById("edit-to").value, world_x: number("edit-x"), world_y: number("edit-y"), world_z: number("edit-z"), world_yaw_rad: number("edit-yaw"), bidirectional: document.getElementById("edit-bidirectional").checked, type: document.getElementById("edit-type").value };
+}
+function rebuildTransitions() {
+  while (transitionGroup.children.length) transitionGroup.remove(transitionGroup.children[0]);
+  for (let index = objects.length - 1; index >= 0; index--) if (objects[index].userData.kind === "transition") objects.splice(index, 1);
+  addTransitions(transitionRecords);
+}
+function applyEditor() {
+  const value = editorValue();
+  if (!value.transition_id || value.from_map === value.to_map || [value.world_x, value.world_y, value.world_z, value.world_yaw_rad].some(Number.isNaN)) { document.getElementById("edit-status").textContent = "请填写有效 ID、不同地图和数值坐标"; return; }
+  const existing = transitionRecords.findIndex(record => record.transition_id === selectedTransitionId);
+  if (existing >= 0) {
+    if (value.transition_id !== selectedTransitionId && transitionRecords.some(record => record.transition_id === value.transition_id)) { document.getElementById("edit-status").textContent = "ID 已存在"; return; }
+    transitionRecords[existing] = value;
+  } else {
+    if (transitionRecords.some(record => record.transition_id === value.transition_id)) { document.getElementById("edit-status").textContent = "ID 已存在"; return; }
+    transitionRecords.push(value);
+  }
+  selectedTransitionId = value.transition_id; rebuildTransitions(); document.getElementById("edit-status").textContent = "修改已应用到当前场景，点击保存写入 CSV";
+}
+function deleteEditor() {
+  if (!selectedTransitionId) { document.getElementById("edit-status").textContent = "请先选中传送点"; return; }
+  transitionRecords = transitionRecords.filter(record => record.transition_id !== selectedTransitionId);
+  selectedTransitionId = null; rebuildTransitions(); fillEditor(null); document.getElementById("edit-status").textContent = "传送点已删除，点击保存写入 CSV";
+}
+async function saveEditor() {
+  try {
+    const response = await fetch("/api/transitions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transitions: transitionRecords }) });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || `保存失败 (${response.status})`);
+    sceneData = result.scene; transitionRecords = sceneData.transitions.map(({ transition_id, from_map, to_map, world_x, world_y, world_z, world_yaw_rad, bidirectional, type }) => ({ transition_id, from_map, to_map, world_x, world_y, world_z, world_yaw_rad, bidirectional, type }));
+    rebuildTransitions(); document.getElementById("edit-status").textContent = "已保存 transition_points.csv（原文件已备份为 .bak）";
+  } catch (error) { document.getElementById("edit-status").textContent = `保存失败：${error.message}`; }
+}
 async function addPointCloud() {
   const response = await fetch("/api/pointcloud.bin");
   if (!response.ok) throw new Error(`point cloud request failed: ${response.status}`);
@@ -128,6 +202,13 @@ function bindControls() {
   document.getElementById("reset-camera").addEventListener("click", () => {
     if (!initialCamera || !controls) return; camera.position.copy(initialCamera.position); controls.target.copy(initialCamera.target); controls.update();
   });
+  updateMapSelects();
+  document.getElementById("edit-mode").addEventListener("change", event => setEditorEnabled(event.target.checked));
+  document.getElementById("new-edit").addEventListener("click", () => { setEditorEnabled(true); waitingForMapClick = true; waitingForMoveClick = false; setNavigationLocked(true); fillEditor(null); document.getElementById("edit-status").textContent = "请点击地图平面放置新传送点（视角已锁定）"; });
+  document.getElementById("move-edit").addEventListener("click", () => { if (!selectedTransitionId) { document.getElementById("edit-status").textContent = "请先点击选中要移动的传送点"; return; } setEditorEnabled(true); waitingForMoveClick = true; waitingForMapClick = false; setNavigationLocked(true); document.getElementById("edit-status").textContent = "请点击地图平面设置新的 X/Y 坐标（视角已锁定）"; });
+  document.getElementById("apply-edit").addEventListener("click", applyEditor);
+  document.getElementById("delete-edit").addEventListener("click", deleteEditor);
+  document.getElementById("save-edit").addEventListener("click", saveEditor);
   if (!renderer) return;
   renderer.domElement.addEventListener("pointerup", event => {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -135,6 +216,15 @@ function bindControls() {
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects(objects, false)[0];
     if (!hit) return;
+    if (document.getElementById("edit-mode").checked && hit.object.userData.kind === "map" && waitingForMapClick) {
+      const point = hit.point; document.getElementById("edit-x").value = point.x.toFixed(3); document.getElementById("edit-y").value = (-point.z).toFixed(3); document.getElementById("edit-z").value = point.y.toFixed(3); waitingForMapClick = false; setNavigationLocked(false); document.getElementById("edit-status").textContent = "已放置坐标，请选择起点/终点地图后点击应用修改"; return;
+    }
+    if (document.getElementById("edit-mode").checked && hit.object.userData.kind === "map" && waitingForMoveClick) {
+      const record = transitionRecords.find(value => value.transition_id === selectedTransitionId);
+      if (record) { record.world_x = Number(hit.point.x.toFixed(3)); record.world_y = Number((-hit.point.z).toFixed(3)); fillEditor(record); rebuildTransitions(); document.getElementById("edit-status").textContent = "已移动选中点，点击保存写入 CSV"; }
+      waitingForMoveClick = false; setNavigationLocked(false); return;
+    }
+    if (document.getElementById("edit-mode").checked && hit.object.userData.kind === "transition") { fillEditor(hit.object.userData.record); return; }
     if (hit.object.userData.kind === "map") {
       const r = hit.object.userData.record;
       showDetails(r.map_id, [["世界原点", `${formatNumber(r.world_origin[0])}, ${formatNumber(r.world_origin[1])}, ${formatNumber(r.world_origin[2])}`], ["平面尺寸", `${formatNumber(r.size[0], 1)} × ${formatNumber(r.size[1], 1)} m`], ["分辨率", `${formatNumber(r.resolution, 3)} m/cell`], ["局部 origin", r.local_origin.map(v => formatNumber(v, 3)).join(", ")], ["高度来源", r.z_source]]);
@@ -152,6 +242,8 @@ async function init() {
   document.getElementById("map-count").textContent = data.maps.length;
   document.getElementById("transition-count").textContent = data.transitions.length;
   document.getElementById("point-count").textContent = data.pointcloud.count.toLocaleString();
+  sceneData = data;
+  transitionRecords = data.transitions.map(({ transition_id, from_map, to_map, world_x, world_y, world_z, world_yaw_rad, bidirectional, type }) => ({ transition_id, from_map, to_map, world_x, world_y, world_z, world_yaw_rad, bidirectional, type }));
   for (const record of data.maps) addMap(record);
   addRelations(data.relations, data.maps); addTransitions(data.transitions);
   if (data.pointcloud.available) { try { await addPointCloud(); } catch (error) { data.warnings.push(error.message); } }
@@ -161,7 +253,7 @@ async function init() {
   }
   fitCamera(data.maps); bindControls(); loading.classList.add("done");
 }
-function resize() { const width = viewport.clientWidth, height = viewport.clientHeight; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height, false); }
+function resize() { const width = viewport.clientWidth, height = viewport.clientHeight; camera.aspect = width / height; camera.updateProjectionMatrix(); if (renderer) renderer.setSize(width, height, false); }
 window.addEventListener("resize", resize); if (renderer) resize();
 init().catch(error => {
   console.error("map viewer initialization failed", error);

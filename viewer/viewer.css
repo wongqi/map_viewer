@@ -15,7 +15,6 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 }
 h1 { margin: 2px 0 6px; font-size: 22px; letter-spacing: 0; }
 h2 { margin: 22px 0 10px; font-size: 13px; color: #9fb1c2; letter-spacing: 0; }
-.eyebrow { margin: 0; color: #72b7ff; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; }
 .muted { margin: 0; color: #8b9aaa; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px; }
 .stats div { padding: 10px 8px; border: 1px solid #293847; background: #111a23; }
@@ -23,8 +22,21 @@ h2 { margin: 22px 0 10px; font-size: 13px; color: #9fb1c2; letter-spacing: 0; }
 .stats strong { font-size: 18px; color: #f0f6fc; }
 .stats span { margin-top: 3px; color: #8b9aaa; font-size: 11px; }
 .controls { display: grid; gap: 10px; margin-top: 20px; }
+.editor { border-top: 1px solid #273442; margin-top: 20px; padding-top: 2px; }
+.editor-body { margin-top: 14px; }
+.edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.edit-grid label { display: grid; gap: 4px; color: #8b9aaa; font-size: 11px; }
+.edit-grid input, .edit-grid select { min-width: 0; width: 100%; padding: 6px; border: 1px solid #334657; border-radius: 3px; color: #e6edf3; background: #111a23; font: inherit; font-size: 12px; }
+.edit-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
+.edit-tools { grid-template-columns: repeat(3, 1fr); }
+.edit-submit { grid-template-columns: 1fr 1fr; }
+button.danger { border-color: #9d403b; background: #702d2a; }
 label { color: #c9d5e0; font-size: 13px; cursor: pointer; }
 input { accent-color: #58a6ff; margin-right: 8px; }
+.controls label { display: flex; align-items: center; gap: 7px; }
+.controls label input { margin-right: 1px; }
+.controls .swatch { flex: 0 0 auto; }
+.height-note { margin-top: 12px; }
 button { width: 100%; padding: 9px 12px; border: 1px solid #3b82c4; border-radius: 4px; color: #e6edf3; background: #155a91; font: inherit; cursor: pointer; }
 button:hover { background: #1c6ca8; }
 .legend { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: #c9d5e0; font-size: 12px; }

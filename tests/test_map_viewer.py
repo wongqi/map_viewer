@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from map_viewer import load_map_project, load_pcd_xyz
+from map_viewer import load_map_project, load_pcd_xyz, save_transition_rows
 
 
 def _write_project(root: Path) -> None:
@@ -48,6 +48,19 @@ class ViewerTests(unittest.TestCase):
             header = "FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nPOINTS 2\nDATA binary_compressed\n"
             path.write_bytes(header.encode() + struct.pack("<II", len(compressed), len(raw)) + compressed)
             np.testing.assert_allclose(load_pcd_xyz(path), [[1, 2, 3], [4, 5, 6]])
+
+    def test_save_transition_rows_keeps_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_project(root)
+            original = (root / "transition_points.csv").read_text()
+            scene = load_map_project(root)
+            keys = ("transition_id", "from_map", "to_map", "world_x", "world_y", "world_z", "world_yaw_rad", "bidirectional", "type")
+            rows = [{key: getattr(scene.transitions[0], key) for key in keys}]
+            rows[0]["world_x"] = 8.5
+            save_transition_rows(root, rows)
+            self.assertIn("8.5", (root / "transition_points.csv").read_text())
+            self.assertEqual((root / "transition_points.csv.bak").read_text(), original)
 
 
 if __name__ == "__main__":

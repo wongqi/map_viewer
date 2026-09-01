@@ -7,9 +7,12 @@ import csv
 import json
 import math
 import mimetypes
+import os
 import re
+import shutil
 import struct
 import sys
+import tempfile
 from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -310,6 +313,69 @@ def load_map_project(directory: Path, max_points: int = 150_000) -> SceneData:
     return scene
 
 
+def _normalise_bool(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes"}:
+        return "true"
+    if text in {"false", "0", "no"}:
+        return "false"
+    raise ValueError(f"invalid bidirectional value: {value!r}")
+
+
+def save_transition_rows(root: Path, rows: list[dict[str, object]]) -> None:
+    """Validate and atomically replace transition_points.csv, keeping a backup."""
+    root = root.expanduser().resolve()
+    map_ids = {path.stem for path in root.glob("*.yaml") if MAP_ID_RE.fullmatch(path.stem)}
+    if not map_ids:
+        raise ValueError("no map YAML files found")
+    normalised: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for index, item in enumerate(rows, 1):
+        if not isinstance(item, dict):
+            raise ValueError(f"transition {index} is not an object")
+        values = {key: str(item.get(key, "")).strip() for key in TRANSITIONS_HEADER}
+        transition_id = values["transition_id"]
+        if not transition_id or transition_id in seen_ids or any(char in transition_id for char in ",\r\n"):
+            raise ValueError(f"invalid or duplicate transition_id: {transition_id!r}")
+        if values["from_map"] not in map_ids or values["to_map"] not in map_ids:
+            raise ValueError(f"transition {transition_id} references an unknown map")
+        if values["from_map"] == values["to_map"]:
+            raise ValueError(f"transition {transition_id} must connect two different maps")
+        for key in ("world_x", "world_y", "world_z", "world_yaw_rad"):
+            try:
+                number = float(values[key])
+            except ValueError as exc:
+                raise ValueError(f"transition {transition_id} has invalid {key}") from exc
+            if not math.isfinite(number):
+                raise ValueError(f"transition {transition_id} has non-finite {key}")
+            values[key] = format(number, ".9g")
+        values["bidirectional"] = _normalise_bool(values["bidirectional"])
+        values["type"] = values["type"] or "manual"
+        seen_ids.add(transition_id)
+        normalised.append(values)
+    path = root / "transition_points.csv"
+    if path.exists():
+        shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
+    root.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=".transition_points.", suffix=".csv", dir=str(root), text=True)
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=TRANSITIONS_HEADER, lineterminator="\n")
+            writer.writeheader()
+            writer.writerows(normalised)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    except Exception:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def _lzf_decompress(data: bytes, expected_size: int) -> bytes:
     output = bytearray()
     index = 0
@@ -453,6 +519,15 @@ class ViewerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _send_json(self, value: object, status: int = 200) -> None:
+        self._send_bytes(json.dumps(value, ensure_ascii=False).encode(), "application/json; charset=utf-8", status)
+
+    def _read_json(self) -> object:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 8 * 1024 * 1024:
+            raise ValueError("request body is too large")
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
     def do_GET(self) -> None:  # noqa: N802
         request_path = unquote(urlparse(self.path).path)
         if request_path == "/api/scene":
@@ -478,6 +553,21 @@ class ViewerHandler(BaseHTTPRequestHandler):
             self._send_bytes(target.read_bytes(), "text/html; charset=utf-8")
             return
         self._send_bytes(b"Not found", "text/plain; charset=utf-8", 404)
+
+    def do_POST(self) -> None:  # noqa: N802
+        request_path = unquote(urlparse(self.path).path)
+        if request_path != "/api/transitions":
+            self._send_json({"error": "Not found"}, 404)
+            return
+        try:
+            payload = self._read_json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("transitions"), list):
+                raise ValueError("transitions must be a JSON array")
+            save_transition_rows(self.viewer_server.map_dir, payload["transitions"])
+            self.viewer_server.scene = None
+            self._send_json({"ok": True, "scene": self.viewer_server.get_scene().metadata()})
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            self._send_json({"ok": False, "error": str(exc)}, 400)
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"[map-viewer] {fmt % args}", file=sys.stderr)
